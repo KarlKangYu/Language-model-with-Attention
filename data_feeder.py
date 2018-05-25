@@ -16,8 +16,8 @@ def read_lm_data(data_path, num_steps):
             lm_in_ids = lm_in.split()[:num_steps]#按每个单词拆开，最多有numsteps个单词,防止有的句子太长
             lm_out_ids = lm_out.split()[1:num_steps + 1]
             ##################
-            lm_in_ids = [0] * max(num_steps - len(lm_in_ids), 0) + lm_in_ids
-            lm_out_ids = [0] * max(num_steps - len(lm_out_ids), 0) + lm_out_ids
+            lm_in_ids = lm_in_ids + [0] * max(num_steps - len(lm_in_ids), 0)
+            lm_out_ids = lm_out_ids + [0] * max(num_steps - len(lm_out_ids), 0)
             ##################
             lm_in_ids_list.append(lm_in_ids)
             lm_out_ids_list.append(lm_out_ids)
@@ -206,3 +206,7 @@ def data_iterator(data, config):
             yield epoch_size, data_feed_to_lm_model, \
                   # data_feed_to_letter_model,\
                   # data_feed_to_phrase_p, data_feed_to_phrase
+
+
+if __name__ == '__main__':
+    list_in, list_out = read_lm_data('/Users/xm180428/Desktop/work/train_data_sample/train_in_ids_lm', 35)
