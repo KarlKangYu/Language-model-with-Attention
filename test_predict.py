@@ -119,6 +119,8 @@ class InputEngineRnn:
         global probabilities, top_k_predictions, probability_topk, probability_p_topk, phrase_p_top_k
         sentence = sentence.rstrip()
         words_line, letters_line, words_ids, letters_ids, words_num, letters_num = self._data_utility.data2ids_line(sentence)#把一行输入拆成单词部分，字母部分，单词部分id表示，字母部分id，单词个数，每个单词的字母个数
+        print('!!!!!', words_ids)
+        print('!!!!!', letters_ids)
         out_str_list = []
         probability_topk_list = []
         # print(words_ids)
@@ -129,39 +131,50 @@ class InputEngineRnn:
         for i in range(len(words_ids)):#对每个单词循环
             words_out = []
             probs_out = []
-            feed_values = {self.lm_input_name: [[words_ids[i]]]}
+            feed_values = {self.lm_input_name: [[words_ids[i]]],
+                           self.lm_top_k_name: k}
             if i > 0:
                 feed_values[self.lm_state_in_name] = lm_state_out
 
-            lm_state_out, phrase_p_top_k, phrase_p_prob, phrase_logits = self._sess.run(
-                [self.lm_state_out_name, self.phrase_p_name, self.phrase_p_probability,
-                 self.phrase_logits], feed_dict=feed_values)
-            phrase_p_top_k = [id for id in phrase_p_top_k[0]]#######################################
-            probability_p_topk = [phrase_p_prob[0][id] for id in phrase_p_top_k]###################################
+            # lm_state_out, phrase_p_top_k, phrase_p_prob, phrase_logits = self._sess.run(
+            #     [self.lm_state_out_name, self.phrase_p_name, self.phrase_p_probability,
+            #      self.phrase_logits], feed_dict=feed_values)
+            # phrase_p_top_k = [id for id in phrase_p_top_k[0]]#######################################
+            # probability_p_topk = [phrase_p_prob[0][id] for id in phrase_p_top_k]###################################
+
+            lm_state_out, lm_prob, lm_top_k = self._sess.run([self.lm_state_out_name,
+                                                              self.lm_output_top_k_probability,
+                                                              self.lm_output_top_k_name],
+                                                             feed_dict=feed_values)
+
+            lm_top_k = [id for id in lm_top_k[0]]
+            lm_probability_topk = [lm_prob[0][id] for id in lm_top_k]
+            words = self._data_utility.ids2outwords(lm_top_k)
+
 
             if i == len(letters_ids):
                 break
             for j in range(len(letters_ids[i])):#循环这个单词内部的每个字母
-                feed_values = {self.kc_input_name: [[letters_ids[i][j]]],
-                               self.kc_top_k_name: k, self.key_length:[1]}
-
-                if j == 0 and len(words_ids) > 0:#第一个字母的初始状态是从语言模型来的，后面的字母的输入状态是从上一个字母的状态来的
-                    feed_values[self.kc_lm_state_in_name] = lm_state_out
-                else:
-                    feed_values[self.kc_state_in_name] = kc_state_out
-                probabilities, top_k_predictions, kc_state_out = self._sess.run([self.kc_output_name, self.kc_top_k_prediction_name,
-                                                                              self.kc_state_out_name], feed_dict=feed_values)
-                probability_topk = [probabilities[0][id] for id in top_k_predictions[0]]
-                words = self._data_utility.ids2outwords(top_k_predictions[0])
-
-                if j == 0 and i > 0:
-                    top_word = words[0]
-                    top_phrase = self._data_utility.get_top_phrase(phrase_logits, top_word)
-                    if top_phrase[0] is not None:
-                        is_phrase_p, phrase_p = self.calculate_phrase_p(top_phrase, probability_p_topk, phrase_p_top_k)
-                        words, probability_topk = self.final_words_out(words, top_phrase, phrase_p, probability_topk)
+            #     feed_values = {self.kc_input_name: [[letters_ids[i][j]]],
+            #                    self.kc_top_k_name: k, self.key_length:[1]}
+            #
+            #     if j == 0 and len(words_ids) > 0:#第一个字母的初始状态是从语言模型来的，后面的字母的输入状态是从上一个字母的状态来的
+            #         feed_values[self.kc_lm_state_in_name] = lm_state_out
+            #     else:
+            #         feed_values[self.kc_state_in_name] = kc_state_out
+            #     probabilities, top_k_predictions, kc_state_out = self._sess.run([self.kc_output_name, self.kc_top_k_prediction_name,
+            #                                                                   self.kc_state_out_name], feed_dict=feed_values)
+            #     probability_topk = [probabilities[0][id] for id in top_k_predictions[0]]
+            #     words = self._data_utility.ids2outwords(top_k_predictions[0])
+            #
+            #     if j == 0 and i > 0:
+            #         top_word = words[0]
+            #         top_phrase = self._data_utility.get_top_phrase(phrase_logits, top_word)
+            #         if top_phrase[0] is not None:
+            #             is_phrase_p, phrase_p = self.calculate_phrase_p(top_phrase, probability_p_topk, phrase_p_top_k)
+            #             words, probability_topk = self.final_words_out(words, top_phrase, phrase_p, probability_topk)
                 words_out.append(words)
-                probs_out.append(probability_topk)
+                probs_out.append(lm_probability_topk)
             out_str = words_out if i > 0 else [['','','']] + words_out[1: ]
             out_str_list.append(out_str)
             probability_topk_list.append(probs_out)
@@ -193,8 +206,11 @@ class InputEngineRnn:
         testfilein = open(test_file_in, "r")
         testfileout = open(test_file_out, 'w')
         t1 = time.time()
+        jj = 0
       
         for sentence in testfilein:
+            print(jj)
+            jj += 1
             sentence = sentence.rstrip()
             result = self.predict_data(sentence, k)
 
@@ -232,13 +248,19 @@ if __name__ == "__main__":
     test_file_out = "test_result"
     #engine = InputEngineRnn(graph_file, vocab_path, full_vocab, config_name)
     engine = InputEngineRnn(graph_file, vocab_path, config_name)
-    # engine.predict_file(test_file_in, test_file_out, 3)
+    engine.predict_file(test_file_in, test_file_out, 3)
 
-    while True:
-        sentence = input("please enter sentence:")
-        if sentence == "quit()":
-            exit()
-        res = engine.predict(sentence, 10)
 
-        print(sentence)
-        print(str(res))
+
+    # while True:
+    #     sentence = input("please enter sentence:")
+    #     if sentence == "quit()":
+    #         exit()
+    #     res = engine.predict(sentence, 10)
+    #
+    #     print(sentence)
+    #     print(str(res))
+
+
+    #engine = InputEngineRnn('static-sanity-check.cfg-iter0-lm.pb', 'train_data_sample/', 'static-sanity-check.cfg')
+    #sentence = 'c a u s e	i d	l i e k	h e f|#|cause	id	like	her'
